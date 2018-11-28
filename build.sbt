@@ -1,4 +1,4 @@
-name := """anagrams"""
+name := """puzzles"""
 
 version := "1.0"
 

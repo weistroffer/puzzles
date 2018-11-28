@@ -32,7 +32,7 @@ object Pentomino {
   def main(args: Array[String]): Unit = {
     implicit val rng: Random = new Random(420)
 
-    val best = meander(2,4)
+    val best = meander(20,2)
 //    val best = search(5,3)
     println(s"Best Board: (${best.score}: \n${best.board}\n${best.board.tiles}")
 //    println(GlobalStats.stats)

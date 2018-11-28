@@ -21,10 +21,23 @@ object Util {
 
 object GlobalStats {
   var looseTries: Int = 0
-  var totalTries: Int = 0
+  val atomicTries = new java.util.concurrent.atomic.AtomicLong
+//  var totalTries: Long = 0
   var fixedTries: Int = 0
+  val startTime: Long = System.currentTimeMillis()
+  var lastPrint: Long = startTime
 
-  def stats: String = s"Stats: (loose: $looseTries, fixed: $fixedTries, sneaky: ${totalTries - looseTries - fixedTries} total: $totalTries | win: ${looseTries * 1.0/totalTries}"
+//  def stats: String = s"Stats: (loose: $looseTries, fixed: $fixedTries, sneaky: ${totalTries - looseTries - fixedTries} total: $totalTries | win: ${looseTries * 1.0/totalTries}"
+
+  def report(): Unit = {
+    val totalTries = atomicTries.getAndIncrement()
+    if ((totalTries & 0xFFFL) == 0L && (System.currentTimeMillis() - lastPrint > 60000)) {
+      lastPrint = System.currentTimeMillis()
+      val totalms = lastPrint - startTime
+      println(f"Tries: $totalTries%12d  Time (m): ${totalms / 60000.0}%7.2f  Tries / ms: ${totalTries / totalms}%d")
+    }
+
+  }
 }
 
 object Pentomino {
@@ -32,8 +45,8 @@ object Pentomino {
   def main(args: Array[String]): Unit = {
     implicit val rng: Random = new Random(420)
 
-    val best = meander(20,2)
-//    val best = search(5,3)
+//    val best = meander(20,2)
+    val best = search(1,0)
     println(s"Best Board: (${best.score}: \n${best.board}\n${best.board.tiles}")
 //    println(GlobalStats.stats)
 //    for (i <- 1 to 10) {
@@ -136,10 +149,11 @@ object Pentomino {
 //      if !(taken intersects this.toBitMap(p))
 //    } yield p
 
+    private val orientationIndices = orientations.indices
     def allPos(taken: BitMap): Iterator[Pos] = for {
-      o <- orientations.indices.iterator
+      o <- orientationIndices.iterator
       c <- orientations(o).willFit(taken).iterator
-    } yield Pos(this, o, c)
+    } yield Pos(idx, o, c)
 
 //    val orientations: Array[Long] = Transform.all8.map(b => canonical.transform(b).shiftTopLeft.z).to[Set].toArray
 //
@@ -348,7 +362,7 @@ object Pentomino {
 
       def optimize(bestSoFar: Best = Best(), allowed: List[Tile] = unused, nLeft: Int = Tile.All.length): Best =
         if (nLeft < 8) bestSoFar else {
-          val candidates = allowed.head.allPos(bitMap).toSeq
+          val candidates = allowed.head.allPos(bitMap).toSeq.par
           val best = candidates.map(p => add(p).optimize(bestSoFar, allowed.tail, nLeft - 1)).maxBy(_.score)
           optimize(best, allowed.tail, nLeft - 1)
         }
@@ -372,6 +386,8 @@ object Pentomino {
         if (size + nLeft < 8) bestSoFar else {
         var best = bestSoFar
         if (size >= 8) {
+//          GlobalStats.totalTries += 1
+          GlobalStats.report()
 //          if (isRigid) println(s"! l: ${hasLooseTiles()} s: $score r: $isRigid")
 //          if (!hasLooseTiles()) println(s" l: ${hasLooseTiles()} s: $score r: $isRigid")
           if (!hasLooseTiles() && (score > best.score) && isRigid) best = Best(this, score)
@@ -594,6 +610,7 @@ object Pentomino {
   object Pos {
 //    def apply(x: Int, y: Int, o: Int): Pos = Pos(Coord(x, y).z | (o << 6))
     def apply(tile: Tile, o: Int, c: Coord): Pos = Pos((tile.idx << 9) | (o << 6) | c.z)
+    def apply(t: Int, o: Int, c: Coord): Pos = Pos((t << 9) | (o << 6) | c.z)
   }
 
   final case class Pos(z: Int) extends AnyVal {
